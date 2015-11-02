@@ -17,6 +17,7 @@ var searches = []rune{'/'}
 var visuals = []rune{'v', 'V'}
 var commands = []rune{':'}
 var inserts = []rune{'A', 'C', 'I', 'O', 'R', 'S', 'a', 'c', 'i', 'o', 's', '?'}
+var vimBackspace = []byte{194, 128}
 
 type token struct {
 	mode  string
@@ -32,6 +33,7 @@ func (l *lexer) run() {
 	for state := lexNormal; state != nil; {
 		state = state(l)
 	}
+	close(l.tokens)
 }
 
 func (l *lexer) next() (error, []byte) {
@@ -47,7 +49,7 @@ func lex(r io.Reader) *lexer {
 	return &lexer{
 		mode:    "normal",
 		scanner: scanner,
-		tokens:  make(chan *token)}
+		tokens:  make(chan *token, 100)}
 }
 
 type stateFn func(l *lexer) stateFn
@@ -61,7 +63,7 @@ func lexNormal(l *lexer) stateFn {
 
 		// account for special vim backspace code (<80>kb)
 		if len(b) > 1 {
-			if bytes.Equal(b, []byte{194, 128}) {
+			if bytes.Equal(b, vimBackspace) {
 				b = []byte{0x8}
 				for i := 0; i < 2; i++ {
 					l.next()

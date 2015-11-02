@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"flag"
 	"fmt"
 	"os"
 )
@@ -23,25 +25,40 @@ func contains(s []rune, c int) bool {
 }
 
 func main() {
+	// parse flags
+	flags := flag.NewFlagSet("cFlags", flag.ContinueOnError)
+
+	all := flags.Bool("a", false, "Show keystrokes in all modes")
+
+	// check flag values
+	if err := flags.Parse(os.Args[1:]); err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
 	l := lex(os.Stdin)
+	go l.run()
 
 	// print output
-	go func() {
-		//var mode string
-		for {
-			t := <-l.tokens
-			var out string
-			out = string(t.bytes)
-			if meta(t.bytes) {
-				out = chord(t.bytes)
+	var mode string
+	for t := range l.tokens {
+		// discard "replacement" characters
+		if bytes.Equal(t.bytes, []byte{239, 191, 189}) {
+			continue
+		}
+		var out string
+		out = string(t.bytes)
+		if meta(t.bytes) {
+			out = chord(t.bytes)
+		}
+		if mode != t.mode {
+			mode = t.mode
+			if t.mode != "normal" || *all {
+				fmt.Fprintln(os.Stdout, "")
 			}
-			// if mode != t.mode {
-			// 	mode = t.mode
-			// 	fmt.Fprintf(os.Stdout, " - %s\n", mode)
-			// }
+		}
+		if t.mode == "normal" || *all {
 			fmt.Fprintf(os.Stdout, "%s", out)
 		}
-	}()
-
-	l.run()
+	}
 }
